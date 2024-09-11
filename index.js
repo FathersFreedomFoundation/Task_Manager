@@ -1,63 +1,68 @@
-// Import required modules
 const express = require('express');
-const cors = require('cors');  // Import cors
+const mongoose = require('mongoose');
+const cors = require('cors');
 const app = express();
-const PORT = process.env.PORT || 5000; // Use port from environment variable or default to 5000
+const PORT = process.env.PORT || 5000;
 
-// Middleware to parse JSON
 app.use(express.json());
-
-// Enable CORS for external testing
 app.use(cors());
 
-// Temporary in-memory storage for tasks
-let tasks = [];
+const dbURI = 'mongodb+srv://leftbeehind:dNesVEP6cIZIZNIv@cluster0.fp7zq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
 
-// Route for root URL
+mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((err) => console.log('Failed to connect to MongoDB:', err));
+
+const taskSchema = new mongoose.Schema({
+  name: String,
+  completed: { type: Boolean, default: false }
+});
+
+const Task = mongoose.model('Task', taskSchema);
+
 app.get('/', (req, res) => {
   res.send('Welcome to the Task Manager API');
 });
 
-// Create a Task (POST)
-app.post('/tasks', (req, res) => {
-  console.log('POST request received: ', req.body); // Log the request body
-
-  const task = {
-    id: tasks.length + 1, // simple incremental ID
-    name: req.body.name,
-    completed: false,
-  };
-
-  tasks.push(task); // Add task to the in-memory array
-  console.log('Task added: ', task); // Log the added task
-
-  res.status(201).send(task); // Send back the new task
+app.post('/tasks', async (req, res) => {
+  try {
+    const task = new Task({ name: req.body.name });
+    const savedTask = await task.save();
+    res.status(201).send(savedTask);
+  } catch (error) {
+    res.status(500).send(error);
+  }
 });
 
-// Get All Tasks (GET)
-app.get('/tasks', (req, res) => {
-  res.send(tasks); // Send the tasks array
+app.get('/tasks', async (req, res) => {
+  try {
+    const tasks = await Task.find();
+    res.send(tasks);
+  } catch (error) {
+    res.status(500).send(error);
+  }
 });
 
-// Update a Task (PUT)
-app.put('/tasks/:id', (req, res) => {
-  const task = tasks.find(t => t.id === parseInt(req.params.id));
-  if (!task) return res.status(404).send('Task not found');
-
-  task.completed = req.body.completed;
-  res.send(task);
+app.put('/tasks/:id', async (req, res) => {
+  try {
+    const task = await Task.findByIdAndUpdate(req.params.id, { completed: req.body.completed }, { new: true });
+    if (!task) return res.status(404).send('Task not found');
+    res.send(task);
+  } catch (error) {
+    res.status(500).send(error);
+  }
 });
 
-// Delete a Task (DELETE)
-app.delete('/tasks/:id', (req, res) => {
-  const taskIndex = tasks.findIndex(t => t.id === parseInt(req.params.id));
-  if (taskIndex === -1) return res.status(404).send('Task not found');
-
-  const deletedTask = tasks.splice(taskIndex, 1);
-  res.send(deletedTask);
+app.delete('/tasks/:id', async (req, res) => {
+  try {
+    const task = await Task.findByIdAndDelete(req.params.id);
+    if (!task) return res.status(404).send('Task not found');
+    res.send(task);
+  } catch (error) {
+    res.status(500).send(error);
+  }
 });
 
-// Start the server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
